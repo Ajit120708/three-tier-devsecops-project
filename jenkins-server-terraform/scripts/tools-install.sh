@@ -1,74 +1,75 @@
-#!/bin/bash -euo pipefail
+#!/bin/bash
+set -e
+exec > /var/log/user-data.log 2>&1
 
 echo "===== Updating system ====="
-sudo apt update -y && sudo apt upgrade -y
+apt-get update -y
 
 echo "===== Installing Java 17 ====="
-sudo apt install -y openjdk-17-jdk
+apt-get install -y openjdk-17-jdk
 java --version
 
 echo "===== Installing Jenkins ====="
-curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo gpg --dearmor -o /usr/share/keyrings/jenkins-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.gpg] https://pkg.jenkins.io/debian binary/" | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
-sudo apt update -y
-sudo apt install -y jenkins
-sudo systemctl enable --now jenkins
+apt-get install -y fontconfig openjdk-17-jre
+curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/ | tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+apt-get update -y
+apt-get install -y jenkins
+systemctl enable jenkins
+systemctl start jenkins
 
 echo "===== Installing Docker ====="
-sudo apt install -y docker.io
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-sudo usermod -aG docker jenkins
-echo "⚠️ Log out and log back in for Docker group changes to take effect"
+apt-get install -y docker.io
+systemctl enable docker
+systemctl start docker
+usermod -aG docker ubuntu || true
+usermod -aG docker jenkins || true
 
 echo "===== Running SonarQube Container ====="
 docker run -d \
   --name sonar \
-  --restart unless-stopped \
   -p 9000:9000 \
   -v sonar_data:/opt/sonarqube/data \
   -v sonar_extensions:/opt/sonarqube/extensions \
   sonarqube:lts-community
 
 echo "===== Installing AWS CLI v2 ====="
-curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-sudo apt install -y unzip
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+apt-get install -y unzip
 unzip awscliv2.zip
-sudo ./aws/install
-rm -rf ./aws awscliv2.zip
+./aws/install
+rm -rf aws awscliv2.zip
 aws --version
 
 echo "===== Installing kubectl ====="
-curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
-echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 chmod +x kubectl
-sudo mv kubectl /usr/local/bin/
+mv kubectl /usr/local/bin/
 kubectl version --client
 
 echo "===== Installing eksctl ====="
 curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
-sudo mv /tmp/eksctl /usr/local/bin
+mv /tmp/eksctl /usr/local/bin
 eksctl version
 
 echo "===== Installing Terraform ====="
-sudo apt install -y lsb-release
-wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update
-sudo apt install -y terraform
+wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+apt-get update -y
+apt-get install -y terraform
 terraform version
 
 echo "===== Installing Trivy ====="
-sudo apt install -y wget gnupg lsb-release
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-sudo apt update
-sudo apt install -y trivy
+apt-get install -y wget apt-transport-https gnupg lsb-release
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/trivy.list
+apt-get update -y
+apt-get install -y trivy
 trivy --version
 
 echo "===== Installing Helm ====="
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+apt-get install -y snapd
+snap install helm --classic
 helm version
 
 echo "===== DevSecOps Jenkins Server Setup Complete ====="
