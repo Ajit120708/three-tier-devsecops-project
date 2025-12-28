@@ -26,7 +26,7 @@ resource "aws_instance" "ec2" {
   }
   
   # User data script executed on instance launch
-  user_data = file("./scripts/tools-install.sh")
+  user_data = file("./scripts/tools-install.sh.tftpl")
 
   # Tags for identifying and organizing the EC2 instance
   tags = {
